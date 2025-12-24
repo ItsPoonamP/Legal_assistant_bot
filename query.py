@@ -1,5 +1,5 @@
 import os
-from dotenv import load_dotenv
+
 
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnableLambda
@@ -8,7 +8,8 @@ from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_groq import ChatGroq
 
-load_dotenv()
+import streamlit as st
+GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
 
 DB_DIR = "faiss_index"
 
@@ -35,7 +36,7 @@ retriever = vectorstore.as_retriever(search_kwargs={"k": 4})
 llm = ChatGroq(
     model_name="llama-3.1-8b-instant",
     temperature=0,
-    api_key=os.getenv("GROQ_API_KEY")
+    api_key=GROQ_API_KEY
 )
 
 # ==============================
@@ -127,5 +128,6 @@ if __name__ == "__main__":
 
         chat_history.append({"role": "user", "content": query})
         chat_history.append({"role": "assistant", "content": response})
+
 
 
