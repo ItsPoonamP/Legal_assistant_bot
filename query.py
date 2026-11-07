@@ -115,6 +115,8 @@ def get_sources(docs):
 # ==============================
 # Rewrites follow-up questions to be self-contained
 # e.g., "What is the punishment?" → "What is the punishment under Section 302 IPC?"
+# Rewrites follow-up questions to be self-contained
+# e.g., "What is the punishment?" → "What is the punishment under Section 302 IPC?"
 rewrite_prompt = ChatPromptTemplate.from_template("""
 Given this conversation history and a follow-up question, 
 rewrite the follow-up question to be completely self-contained.
@@ -189,10 +191,25 @@ if __name__ == "__main__":
         if query.lower() == "exit":
             break
 
-        response = rag_chain.invoke({
-            "question": query,
-            "chat_history": chat_history
-        })
+        rag_chain = (
+            {
+                # Rewrite question first, THEN retrieve
+                "question": RunnableLambda(rewrite_question),
+                "context": RunnableLambda(rewrite_question) | retriever | format_docs,
+                "chat_history": RunnableLambda(get_history) | format_history,
+            }
+            | prompt
+            | llm
+            | StrOutputParser()
+        )
+        
+        # Also expose a chain that returns sources separately (for app.py display)
+        def get_answer_with_sources(input_dict):
+            rewritten_q = rewrite_question(input_dict)
+            docs = retriever.invoke(rewritten_q)
+            sources = get_sources(docs)
+            answer = rag_chain.invoke(input_dict)
+            return {"answer": answer, "sources": sources}
 
         print("\nAnswer:\n", response, "\n")
 
