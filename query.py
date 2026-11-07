@@ -29,7 +29,7 @@ vectorstore = FAISS.load_local(
 
 import pickle
 from langchain_community.retrievers import BM25Retriever
-from langchain.retrievers import EnsembleRetriever
+from langchain_classic.retrievers.ensemble import EnsembleRetriever
 
 # Load saved chunks for BM25
 with open("bm25_chunks.pkl", "rb") as f:
