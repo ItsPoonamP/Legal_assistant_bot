@@ -47,6 +47,21 @@ retriever = EnsembleRetriever(
     retrievers=[bm25_retriever, faiss_retriever],
     weights=[0.4, 0.6]
 )
+from langchain.retrievers import ContextualCompressionRetriever
+from langchain.retrievers.document_compressors import CrossEncoderReranker
+from langchain_community.cross_encoders import HuggingFaceCrossEncoder
+
+# Re-ranker: reads query + each chunk together, scores true relevance
+cross_encoder = HuggingFaceCrossEncoder(
+    model_name="cross-encoder/ms-marco-MiniLM-L-6-v2"
+)
+reranker = CrossEncoderReranker(model=cross_encoder, top_n=3)
+
+# Final retriever = hybrid search → re-rank → keep top 3
+retriever = ContextualCompressionRetriever(
+    base_compressor=reranker,
+    base_retriever=retriever
+)
 
 # ==============================
 # 2️⃣ LLM (VALID MODEL)
