@@ -7,3 +7,4 @@ langchain-huggingface
 sentence-transformers
 faiss-cpu
 pydantic
+rank-bm25
