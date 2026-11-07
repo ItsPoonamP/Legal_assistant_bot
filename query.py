@@ -97,7 +97,18 @@ def format_history(history):
 def format_docs(docs):
     if not docs:
         return "NO RELEVANT LEGAL TEXT FOUND."
-    return "\n\n".join(doc.page_content for doc in docs)
+    formatted = []
+    for doc in docs:
+        source = doc.metadata.get("source", "Unknown document")
+        category = doc.metadata.get("category", "general")
+        formatted.append(
+            f"[Source: {source} | Category: {category}]\n{doc.page_content}"
+        )
+    return "\n\n---\n\n".join(formatted)
+
+# Separate function to extract just source names for display
+def get_sources(docs):
+    return list(set(doc.metadata.get("source", "Unknown") for doc in docs))
 
 # ==============================
 # 4️⃣ Prompt (LEGAL SAFE)
