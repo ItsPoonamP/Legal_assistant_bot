@@ -113,7 +113,32 @@ def get_sources(docs):
 # ==============================
 # 4️⃣ Prompt (LEGAL SAFE)
 # ==============================
+# Rewrites follow-up questions to be self-contained
+# e.g., "What is the punishment?" → "What is the punishment under Section 302 IPC?"
+rewrite_prompt = ChatPromptTemplate.from_template("""
+Given this conversation history and a follow-up question, 
+rewrite the follow-up question to be completely self-contained.
+If it's already self-contained, return it unchanged.
 
+Conversation History:
+{chat_history}
+
+Follow-up Question: {question}
+
+Rewritten Question (return ONLY the question, nothing else):
+""")
+
+rewrite_chain = rewrite_prompt | llm | StrOutputParser()
+
+def rewrite_question(input_):
+    history = input_.get("chat_history", [])
+    question = get_question(input_)
+    if not history:  # no history = no need to rewrite
+        return question
+    return rewrite_chain.invoke({
+        "chat_history": format_history(history),
+        "question": question
+    })
 prompt = ChatPromptTemplate.from_template("""
 You are a legal research assistant.
 
