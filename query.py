@@ -87,7 +87,7 @@ retriever = ContextualCompressionRetriever(
 # 5️⃣ LLM
 # ==============================
 llm = ChatGroq(
-    model_name="llama-3.1-8b-instant",
+    model_name="llama3-8b-8192",
     temperature=0,
     api_key=GROQ_API_KEY
 )
