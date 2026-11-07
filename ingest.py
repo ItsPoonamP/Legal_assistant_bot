@@ -56,7 +56,13 @@ vectorstore = FAISS.from_documents(chunks, embeddings)
 vectorstore.save_local(DB_DIR)
 
 print("✅ FAISS index created successfully")
+import pickle
 
+# Save chunks for BM25 (keyword search) — BM25 can't be saved like FAISS
+with open("bm25_chunks.pkl", "wb") as f:
+    pickle.dump(chunks, f)
+
+print("✅ BM25 chunks saved for hybrid search")
 
 
 #from langchain_text_splitters import CharacterTextSplitter  from langchain_community.embeddings import HuggingFaceEmbeddings
