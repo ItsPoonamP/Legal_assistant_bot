@@ -213,4 +213,6 @@ if __name__ == "__main__":
             "chat_history": chat_history
         })
         print("\nAnswer:\n", result["answer"])
-        print("Sources:",
+        print("Sources:", result["sources"], "\n")
+        chat_history.append({"role": "user", "content": query})
+        chat_history.append({"role": "assistant", "content": result["answer"]})
