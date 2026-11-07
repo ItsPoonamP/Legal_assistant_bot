@@ -18,8 +18,19 @@ loader = DirectoryLoader(
     loader_cls=TextLoader,
     loader_kwargs={"encoding": "utf-8"}
 )
-
 documents = loader.load()
+
+# Tag each document with category based on filename
+for doc in documents:
+    filename = doc.metadata.get("source", "").lower()
+    if "contract" in filename:
+        doc.metadata["category"] = "contract_law"
+    elif "criminal" in filename or "ipc" in filename:
+        doc.metadata["category"] = "criminal_law"
+    elif "ip" in filename or "patent" in filename:
+        doc.metadata["category"] = "ip_law"
+    else:
+        doc.metadata["category"] = "general"
 print(f"📄 Documents loaded: {len(documents)}")
 
 if not documents:
