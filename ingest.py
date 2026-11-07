@@ -59,9 +59,27 @@ print("✅ FAISS index created successfully")
 import pickle
 
 # Save chunks for BM25 (keyword search) — BM25 can't be saved like FAISS
-with open("bm25_chunks.pkl", "wb") as f:
-    pickle.dump(chunks, f)
+import os
 
+# Generate BM25 chunks on the fly if file doesn't exist
+if not os.path.exists("bm25_chunks.pkl"):
+    from langchain_community.document_loaders import DirectoryLoader, TextLoader
+    from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+    loader = DirectoryLoader(
+        "data",
+        glob="**/*.md",
+        loader_cls=TextLoader,
+        loader_kwargs={"encoding": "utf-8"}
+    )
+    raw_docs = loader.load()
+    splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+    chunks = splitter.split_documents(raw_docs)
+    with open("bm25_chunks.pkl", "wb") as f:
+        pickle.dump(chunks, f)
+else:
+    with open("bm25_chunks.pkl", "rb") as f:
+        chunks = pickle.load(f)
 print("✅ BM25 chunks saved for hybrid search")
 
 
