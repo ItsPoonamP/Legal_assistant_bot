@@ -4,14 +4,17 @@ import pickle
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnableLambda
 from langchain_core.output_parsers import StrOutputParser
+from langchain_core.retrievers import BaseRetriever
+from langchain_core.documents import Document
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.retrievers import BM25Retriever
-from langchain.retrievers.ensemble import EnsembleRetriever
-from langchain.retrievers.contextual_compression import ContextualCompressionRetriever
 from langchain_community.cross_encoders import HuggingFaceCrossEncoder
 from langchain_community.document_compressors import CrossEncoderReranker
+from langchain.retrievers.contextual_compression import ContextualCompressionRetriever
 from langchain_groq import ChatGroq
+from pydantic import Field
+from typing import List
 
 import streamlit as st
 GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
