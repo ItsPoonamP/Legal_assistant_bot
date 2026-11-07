@@ -1,11 +1,16 @@
 import os
-
+import pickle
 
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnableLambda
 from langchain_core.output_parsers import StrOutputParser
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_community.retrievers import BM25Retriever
+from langchain_community.retrievers import EnsembleRetriever
+from langchain_community.retrievers import ContextualCompressionRetriever
+from langchain_community.cross_encoders import HuggingFaceCrossEncoder
+from langchain.retrievers.document_compressors import CrossEncoderReranker
 from langchain_groq import ChatGroq
 
 import streamlit as st
@@ -16,7 +21,6 @@ DB_DIR = "faiss_index"
 # ==============================
 # 1️⃣ Embeddings + FAISS
 # ==============================
-
 embeddings = HuggingFaceEmbeddings(
     model_name="sentence-transformers/all-MiniLM-L6-v2"
 )
@@ -27,46 +31,56 @@ vectorstore = FAISS.load_local(
     allow_dangerous_deserialization=True
 )
 
-import pickle
-from langchain_community.retrievers import BM25Retriever
-from langchain_classic.retrievers.ensemble import EnsembleRetriever
+# ==============================
+# 2️⃣ BM25 chunks (generate if missing)
+# ==============================
+if not os.path.exists("bm25_chunks.pkl"):
+    from langchain_community.document_loaders import DirectoryLoader, TextLoader
+    from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-# Load saved chunks for BM25
-with open("bm25_chunks.pkl", "rb") as f:
-    chunks = pickle.load(f)
+    loader = DirectoryLoader(
+        "data", glob="**/*.md",
+        loader_cls=TextLoader,
+        loader_kwargs={"encoding": "utf-8"}
+    )
+    raw_docs = loader.load()
+    splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+    chunks = splitter.split_documents(raw_docs)
+    with open("bm25_chunks.pkl", "wb") as f:
+        pickle.dump(chunks, f)
+else:
+    with open("bm25_chunks.pkl", "rb") as f:
+        chunks = pickle.load(f)
 
-# BM25 = keyword search
+# ==============================
+# 3️⃣ Hybrid Retriever
+# ==============================
 bm25_retriever = BM25Retriever.from_documents(chunks)
 bm25_retriever.k = 4
 
-# FAISS = semantic search
 faiss_retriever = vectorstore.as_retriever(search_kwargs={"k": 4})
 
-# Hybrid: 60% semantic, 40% keyword
-retriever = EnsembleRetriever(
+base_retriever = EnsembleRetriever(
     retrievers=[bm25_retriever, faiss_retriever],
     weights=[0.4, 0.6]
 )
-from langchain.retrievers import ContextualCompressionRetriever
-from langchain.retrievers.document_compressors import CrossEncoderReranker
-from langchain_community.cross_encoders import HuggingFaceCrossEncoder
 
-# Re-ranker: reads query + each chunk together, scores true relevance
+# ==============================
+# 4️⃣ Cross-Encoder Re-ranker
+# ==============================
 cross_encoder = HuggingFaceCrossEncoder(
     model_name="cross-encoder/ms-marco-MiniLM-L-6-v2"
 )
 reranker = CrossEncoderReranker(model=cross_encoder, top_n=3)
 
-# Final retriever = hybrid search → re-rank → keep top 3
 retriever = ContextualCompressionRetriever(
     base_compressor=reranker,
-    base_retriever=retriever
+    base_retriever=base_retriever
 )
 
 # ==============================
-# 2️⃣ LLM (VALID MODEL)
+# 5️⃣ LLM
 # ==============================
-
 llm = ChatGroq(
     model_name="llama-3.1-8b-instant",
     temperature=0,
@@ -74,11 +88,9 @@ llm = ChatGroq(
 )
 
 # ==============================
-# 3️⃣ Helper Functions (SAFE)
+# 6️⃣ Helper Functions
 # ==============================
-
 def get_question(input_):
-    """Accepts string OR dict"""
     if isinstance(input_, str):
         return input_
     return input_["question"]
@@ -106,17 +118,12 @@ def format_docs(docs):
         )
     return "\n\n---\n\n".join(formatted)
 
-# Separate function to extract just source names for display
 def get_sources(docs):
     return list(set(doc.metadata.get("source", "Unknown") for doc in docs))
 
 # ==============================
-# 4️⃣ Prompt (LEGAL SAFE)
+# 7️⃣ Query Rewriting
 # ==============================
-# Rewrites follow-up questions to be self-contained
-# e.g., "What is the punishment?" → "What is the punishment under Section 302 IPC?"
-# Rewrites follow-up questions to be self-contained
-# e.g., "What is the punishment?" → "What is the punishment under Section 302 IPC?"
 rewrite_prompt = ChatPromptTemplate.from_template("""
 Given this conversation history and a follow-up question, 
 rewrite the follow-up question to be completely self-contained.
@@ -135,12 +142,16 @@ rewrite_chain = rewrite_prompt | llm | StrOutputParser()
 def rewrite_question(input_):
     history = input_.get("chat_history", [])
     question = get_question(input_)
-    if not history:  # no history = no need to rewrite
+    if not history:
         return question
     return rewrite_chain.invoke({
         "chat_history": format_history(history),
         "question": question
     })
+
+# ==============================
+# 8️⃣ Main Prompt
+# ==============================
 prompt = ChatPromptTemplate.from_template("""
 You are a legal research assistant.
 
@@ -164,13 +175,12 @@ Answer (include disclaimer):
 """)
 
 # ==============================
-# 5️⃣ ✅ HISTORY-AWARE RAG CHAIN
+# 9️⃣ RAG Chain
 # ==============================
-
 rag_chain = (
     {
-        "question": RunnableLambda(get_question),
-        "context": RunnableLambda(get_question) | retriever | format_docs,
+        "question": RunnableLambda(rewrite_question),
+        "context": RunnableLambda(rewrite_question) | retriever | format_docs,
         "chat_history": RunnableLambda(get_history) | format_history,
     }
     | prompt
@@ -179,42 +189,28 @@ rag_chain = (
 )
 
 # ==============================
-# 6️⃣ CLI TEST (OPTIONAL)
+# 🔟 Answer + Sources helper
 # ==============================
+def get_answer_with_sources(input_dict):
+    rewritten_q = rewrite_question(input_dict)
+    docs = retriever.invoke(rewritten_q)
+    sources = get_sources(docs)
+    answer = rag_chain.invoke(input_dict)
+    return {"answer": answer, "sources": sources}
 
+# ==============================
+# CLI TEST (OPTIONAL)
+# ==============================
 if __name__ == "__main__":
     print("⚖️ Legal RAG Assistant (type 'exit' to quit)")
     chat_history = []
-
     while True:
         query = input(">> ")
         if query.lower() == "exit":
             break
-
-        rag_chain = (
-            {
-                # Rewrite question first, THEN retrieve
-                "question": RunnableLambda(rewrite_question),
-                "context": RunnableLambda(rewrite_question) | retriever | format_docs,
-                "chat_history": RunnableLambda(get_history) | format_history,
-            }
-            | prompt
-            | llm
-            | StrOutputParser()
-        )
-        
-        # Also expose a chain that returns sources separately (for app.py display)
-        def get_answer_with_sources(input_dict):
-            rewritten_q = rewrite_question(input_dict)
-            docs = retriever.invoke(rewritten_q)
-            sources = get_sources(docs)
-            answer = rag_chain.invoke(input_dict)
-            return {"answer": answer, "sources": sources}
-
-        print("\nAnswer:\n", response, "\n")
-
-        chat_history.append({"role": "user", "content": query})
-        chat_history.append({"role": "assistant", "content": response})
-
-
-
+        result = get_answer_with_sources({
+            "question": query,
+            "chat_history": chat_history
+        })
+        print("\nAnswer:\n", result["answer"])
+        print("Sources:",
