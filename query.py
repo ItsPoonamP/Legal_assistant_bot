@@ -27,7 +27,26 @@ vectorstore = FAISS.load_local(
     allow_dangerous_deserialization=True
 )
 
-retriever = vectorstore.as_retriever(search_kwargs={"k": 4})
+import pickle
+from langchain_community.retrievers import BM25Retriever
+from langchain.retrievers import EnsembleRetriever
+
+# Load saved chunks for BM25
+with open("bm25_chunks.pkl", "rb") as f:
+    chunks = pickle.load(f)
+
+# BM25 = keyword search
+bm25_retriever = BM25Retriever.from_documents(chunks)
+bm25_retriever.k = 4
+
+# FAISS = semantic search
+faiss_retriever = vectorstore.as_retriever(search_kwargs={"k": 4})
+
+# Hybrid: 60% semantic, 40% keyword
+retriever = EnsembleRetriever(
+    retrievers=[bm25_retriever, faiss_retriever],
+    weights=[0.4, 0.6]
+)
 
 # ==============================
 # 2️⃣ LLM (VALID MODEL)
