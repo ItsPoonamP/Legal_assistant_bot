@@ -8,7 +8,7 @@ from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_groq import ChatGroq
 import streamlit as st
 
-from hybrid_retriever import HybridRetriever   # NEW
+from Hybrid_Retriver import HybridRetriever   # NEW
 
 GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
 
