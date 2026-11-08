@@ -8,7 +8,7 @@ from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_groq import ChatGroq
 import streamlit as st
 
-from Hybrid_Retriver import HybridRetriever   # NEW
+from hybrid_retriever import HybridRetriever   # NEW
 
 GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
 
@@ -20,6 +20,11 @@ DB_DIR = "faiss_index"
 USE_BM25 = True      # hybrid search: keyword (BM25) + semantic (FAISS)
 USE_RERANK = True    # cross-encoder reranking of the fused shortlist
 TOP_K = 4            # chunks sent to the LLM
+
+# Groq retired llama-3.1-8b-instant on 2026-08-16 (free/developer tiers).
+# The model name can be overridden from Streamlit secrets (GROQ_MODEL = "...")
+# so a future deprecation needs no code change. See console.groq.com/docs/deprecations
+GROQ_MODEL = st.secrets.get("GROQ_MODEL", "openai/gpt-oss-20b")
 
 # ==============================
 # 1️⃣ Embeddings + FAISS + HYBRID RETRIEVER
@@ -49,7 +54,7 @@ retriever = HybridRetriever(
 # ==============================
 
 llm = ChatGroq(
-    model_name="llama-3.1-8b-instant",
+    model_name=GROQ_MODEL,
     temperature=0,
     api_key=GROQ_API_KEY
 )
